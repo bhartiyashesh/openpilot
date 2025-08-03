@@ -65,11 +65,38 @@ class HudRenderer(Widget):
     self.speed: float = 0.0
     self.v_ego_cluster_seen: bool = False
 
+    # GPS direction indicator
+    self.gps_heading: float = 0.0
+    self.gps_valid: bool = False
+
     self._font_semi_bold: rl.Font = gui_app.font(FontWeight.SEMI_BOLD)
     self._font_bold: rl.Font = gui_app.font(FontWeight.BOLD)
     self._font_medium: rl.Font = gui_app.font(FontWeight.MEDIUM)
 
     self._exp_button = ExpButton(UI_CONFIG.button_size, UI_CONFIG.wheel_icon_size)
+
+  def _get_direction_text(self, heading: float) -> str:
+    """Convert heading in degrees to cardinal direction text."""
+    # Normalize heading to 0-360 degrees
+    heading = heading % 360
+
+    # Define direction ranges (in degrees)
+    directions = [
+        (337.5, 22.5, "N"),
+        (22.5, 67.5, "NE"),
+        (67.5, 112.5, "E"),
+        (112.5, 157.5, "SE"),
+        (157.5, 202.5, "S"),
+        (202.5, 247.5, "SW"),
+        (247.5, 292.5, "W"),
+        (292.5, 337.5, "NW"),
+    ]
+
+    for start, end, direction in directions:
+        if start <= heading < end:
+            return direction
+
+    return "N"  # Default fallback
 
   def _update_state(self) -> None:
     """Update HUD state based on car state and controls state."""
@@ -99,6 +126,15 @@ class HudRenderer(Widget):
     speed_conversion = CV.MS_TO_KPH if ui_state.is_metric else CV.MS_TO_MPH
     self.speed = max(0.0, v_ego * speed_conversion)
 
+    # Update GPS heading
+    self.gps_valid = False
+    if ui_state.sm.updated["gpsLocationExternal"] and ui_state.sm["gpsLocationExternal"].hasFix:
+      self.gps_heading = ui_state.sm["gpsLocationExternal"].bearingDeg
+      self.gps_valid = True
+    elif ui_state.sm.updated["gpsLocation"] and ui_state.sm["gpsLocation"].hasFix:
+      self.gps_heading = ui_state.sm["gpsLocation"].bearingDeg
+      self.gps_valid = True
+
   def _render(self, rect: rl.Rectangle) -> None:
     """Render HUD elements to the screen."""
     # Draw the header background
@@ -115,6 +151,7 @@ class HudRenderer(Widget):
       self._draw_set_speed(rect)
 
     self._draw_current_speed(rect)
+    self._draw_direction_indicator(rect)
 
     button_x = rect.x + rect.width - UI_CONFIG.border_size - UI_CONFIG.button_size
     button_y = rect.y + UI_CONFIG.border_size
@@ -177,3 +214,34 @@ class HudRenderer(Widget):
     unit_text_size = measure_text_cached(self._font_medium, unit_text, FONT_SIZES.speed_unit)
     unit_pos = rl.Vector2(rect.x + rect.width / 2 - unit_text_size.x / 2, 290 - unit_text_size.y / 2)
     rl.draw_text_ex(self._font_medium, unit_text, unit_pos, FONT_SIZES.speed_unit, 0, COLORS.white_translucent)
+
+  def _draw_direction_indicator(self, rect: rl.Rectangle) -> None:
+    """Draw the GPS direction indicator."""
+    if not self.gps_valid:
+      return
+
+    # Get direction text
+    direction_text = self._get_direction_text(self.gps_heading)
+
+    # Position the indicator in the top-left corner
+    indicator_size = 60
+    x = rect.x + UI_CONFIG.border_size
+    y = rect.y + UI_CONFIG.border_size
+
+    # Draw background circle
+    center_x = x + indicator_size // 2
+    center_y = y + indicator_size // 2
+    radius = indicator_size // 2
+
+    # Draw background circle with transparency
+    rl.draw_circle(center_x, center_y, radius, COLORS.black_translucent)
+    rl.draw_circle_lines(center_x, center_y, radius, 2, COLORS.white_translucent)
+
+    # Draw direction text
+    direction_font_size = 24
+    direction_text_size = measure_text_cached(self._font_bold, direction_text, direction_font_size)
+    direction_pos = rl.Vector2(
+      center_x - direction_text_size.x / 2,
+      center_y - direction_text_size.y / 2
+    )
+    rl.draw_text_ex(self._font_bold, direction_text, direction_pos, direction_font_size, 0, COLORS.white)
