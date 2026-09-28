@@ -58,5 +58,17 @@ def build_state(now: float, speed_ms: float, control: dict, turn: dict | None, s
   }
 
 
+MAP_RULE_M, MAP_RULE_S = 150.0, 8.0  # a light / stop sign this close (distance or time) needs end-to-end
+SHARP_TURN_DEG, SHARP_TURN_M = 45.0, 150.0
+
+
+def map_rule_blended(control: dict, turn: dict | None, speed_ms: float) -> bool:
+  """Network-free rule that runs on the car even without Jev: end-to-end near mapped controls and sharp turns."""
+  if control.get("present") and control["distance_m"] <= max(MAP_RULE_M, MAP_RULE_S * speed_ms):
+    return True
+  return bool(turn and turn.get("angle_deg") is not None and abs(turn["angle_deg"]) > SHARP_TURN_DEG
+              and 0 < turn["distance_m"] <= SHARP_TURN_M)
+
+
 def questions() -> dict:
   return {QUESTION: {"type": "choice", "instructions": RULES, "criteria": MODE}}

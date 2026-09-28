@@ -6,7 +6,11 @@ the Mapbox route, its traffic_signal / stop_sign intersections and its turns, al
 along the route. Without one: OpenStreetMap signals and stop signs near the car, keeping those
 ahead of the current heading. Network calls happen in refresh(); ahead() is pure and cheap.
 """
+import gzip
+import json
 import math
+from collections import defaultdict
+from pathlib import Path
 
 import requests
 
@@ -71,14 +75,48 @@ class OsmControls:
     self._center, self._fetched_at = (lat, lon), now
 
   def ahead(self, lat: float, lon: float, heading: float) -> dict:
-    best = None
-    for node in self.nodes:
-      d = distance_m(lat, lon, node["lat"], node["lon"])
-      off = angle_diff(bearing_deg(lat, lon, node["lat"], node["lon"]), heading)
-      if 0 < d <= AHEAD_MAX_M and abs(off) <= AHEAD_CONE_DEG and d * abs(math.sin(math.radians(off))) <= AHEAD_LATERAL_M:
-        if best is None or d < best[0]:
-          best = (d, node["type"])
-    return {"present": True, "type": best[1], "distance_m": round(best[0])} if best else {"present": False}
+    return pick_ahead(self.nodes, lat, lon, heading)
+
+
+def pick_ahead(nodes, lat: float, lon: float, heading: float) -> dict:
+  """Nearest traffic light / stop sign ahead of the heading, within AHEAD_MAX_M."""
+  best = None
+  for node in nodes:
+    d = distance_m(lat, lon, node["lat"], node["lon"])
+    off = angle_diff(bearing_deg(lat, lon, node["lat"], node["lon"]), heading)
+    if 0 < d <= AHEAD_MAX_M and abs(off) <= AHEAD_CONE_DEG and d * abs(math.sin(math.radians(off))) <= AHEAD_LATERAL_M:
+      if best is None or d < best[0]:
+        best = (d, node["type"])
+  return {"present": True, "type": best[1], "distance_m": round(best[0])} if best else {"present": False}
+
+
+# Prebuilt OpenStreetMap extract (data (c) OpenStreetMap contributors, ODbL): no network needed.
+OFFLINE_PATHS = (Path("/data/jev/osm_controls.json.gz"), Path(__file__).parent / "data" / "illinois_controls.json.gz")
+GRID_DEG = 0.01  # ~1.1 km north-south; neighbouring cells cover AHEAD_MAX_M
+TYPES = ("traffic_light", "stop_sign")
+
+
+class OfflineControls:
+  def __init__(self, nodes: list[list[int]]):
+    self._grid: dict[tuple[int, int], list[dict]] = defaultdict(list)
+    for lat5, lon5, kind in nodes:
+      lat, lon = lat5 / 1e5, lon5 / 1e5
+      self._grid[(int(lat // GRID_DEG), int(lon // GRID_DEG))].append({"lat": lat, "lon": lon, "type": TYPES[kind]})
+
+  @classmethod
+  def load(cls, paths=OFFLINE_PATHS) -> "OfflineControls | None":
+    for path in paths:
+      try:
+        with gzip.open(path, "rt") as f:
+          return cls(json.load(f)["nodes"])
+      except (OSError, ValueError, KeyError):
+        continue
+    return None
+
+  def ahead(self, lat: float, lon: float, heading: float) -> dict:
+    row, col = int(lat // GRID_DEG), int(lon // GRID_DEG)
+    nearby = [n for dr in (-1, 0, 1) for dc in (-1, 0, 1) for n in self._grid.get((row + dr, col + dc), ())]
+    return pick_ahead(nearby, lat, lon, heading)
 
 
 class MapboxRoute:

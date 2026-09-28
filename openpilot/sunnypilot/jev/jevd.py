@@ -4,8 +4,10 @@ jevd: once a second, ask Jev whether openpilot should drive end-to-end ("blended
 the answer for the longitudinal planner (see reader.py). The planner only ever ADDS end-to-end
 time on top of Dynamic Experimental Control, and ignores answers older than 2.5 s.
 
-Map facts: Mapbox route when /data/jev/destination.json and a mapbox_token exist, otherwise
-OpenStreetMap. Map lookups run in their own thread so a slow network never delays a decision.
+Map facts: Mapbox route when /data/jev/destination.json and a mapbox_token exist, otherwise the
+bundled offline OpenStreetMap extract (live Overpass only if no extract is present). Each second
+the published mode is blended if the network-free map rule OR Jev says so, so the car keeps the
+map benefit with no Jev key or no internet. Map lookups run in their own thread.
 Every decision is appended to /data/jev/log/ for later review.
 """
 import json
@@ -20,7 +22,7 @@ import openpilot.cereal.messaging as messaging
 from openpilot.common.realtime import Ratekeeper
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.jev import client, config, logic
-from openpilot.sunnypilot.jev.controls import MapboxRoute, OsmControls
+from openpilot.sunnypilot.jev.controls import MapboxRoute, OfflineControls, OsmControls
 from openpilot.sunnypilot.jev.reader import write_mode
 
 DESTINATION_PATH = Path("/data/jev/destination.json")
@@ -43,6 +45,7 @@ class MapWorker(threading.Thread):
   def __init__(self, session: requests.Session, mapbox_token: str | None):
     super().__init__(daemon=True)
     self.osm = OsmControls(session)
+    self.offline = OfflineControls.load()
     self.route = MapboxRoute(session, mapbox_token) if mapbox_token else None
     self.position: tuple[float, float, float] | None = None  # lat, lon, heading
 
@@ -57,7 +60,7 @@ class MapWorker(threading.Thread):
             self.route.set_destination(read_destination())
             if self.route.needs_refresh(lat, lon, now):
               self.route.refresh(lat, lon, heading, now)
-          if self.osm.needs_refresh(lat, lon, now):
+          if self.offline is None and self.osm.needs_refresh(lat, lon, now):
             self.osm.refresh(lat, lon, now)
         except requests.RequestException as e:
           cloudlog.warning(f"jevd: map refresh failed: {e}")
@@ -67,6 +70,8 @@ class MapWorker(threading.Thread):
     if self.route is not None and self.route.points:
       control, turn = self.route.ahead(lat, lon)
       return control, turn, "mapbox"
+    if self.offline is not None:
+      return self.offline.ahead(lat, lon, heading), None, "osm_offline"
     return self.osm.ahead(lat, lon, heading), None, "osm"
 
 
@@ -93,7 +98,7 @@ def main() -> None:
     if now - last_config > CONFIG_EVERY_S:
       cfg, last_config = config.load(), now
     gps = next((sm[s] for s in ("gpsLocationExternal", "gpsLocation") if sm.alive[s] and sm[s].hasFix), None)
-    if not cfg.get("enabled") or not cfg.get("typesafe_api_key") or gps is None:
+    if not cfg.get("enabled") or gps is None:
       rk.keep_time()
       continue
 
@@ -107,14 +112,18 @@ def main() -> None:
     action = sm["modelV2"].action
     state = logic.build_state(now, speed, control, turn, action.shouldStop, action.desiredAcceleration, lead, memory, source)
 
-    started = time.monotonic()
-    mode = client.ask(session, cfg["typesafe_api_key"], state, questions, logic.QUESTION)
-    latency_ms = round((time.monotonic() - started) * 1000)
-    if mode in logic.MODE:
-      memory.set_mode(now, mode)
-      write_mode(mode)
+    rule = logic.map_rule_blended(control, turn, speed)
+    jev, latency_ms = None, None
+    if cfg.get("typesafe_api_key"):
+      started = time.monotonic()
+      jev = client.ask(session, cfg["typesafe_api_key"], state, questions, logic.QUESTION)
+      latency_ms = round((time.monotonic() - started) * 1000)
+    mode = "blended" if rule or jev == "blended" else "acc"
+    memory.set_mode(now, mode)
+    write_mode(mode)
 
-    log.write(json.dumps({"t": round(now, 1), "mode": mode, "latency_ms": latency_ms, "state": state}) + "\n")
+    log.write(json.dumps({"t": round(now, 1), "mode": mode, "map_rule": rule, "jev": jev, "latency_ms": latency_ms,
+                          "state": state}) + "\n")
     log.flush()
     if log.tell() > LOG_MAX_BYTES:
       log.close()
