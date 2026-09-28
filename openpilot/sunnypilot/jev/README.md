@@ -6,7 +6,14 @@ uses end-to-end when Dynamic Experimental Control **or** a Jev decision less tha
 says so. Jev can only add end-to-end time; if it is off, slow or offline, DEC decides alone.
 
 Map facts: the Mapbox route (traffic signals, stop signs, turns) when a destination file and a
-Mapbox token exist, otherwise OpenStreetMap signals and stop signs ahead of the car's heading.
+Mapbox token exist, otherwise the bundled offline OpenStreetMap extract (`data/illinois_controls.json.gz`,
+20,188 traffic signals and 44,825 stop signs, no network needed). Each second `jevd` publishes
+end-to-end if a network-free map rule (a light / stop sign within max(150 m, 8 s)) OR Jev says so,
+so it works with no Jev key and no internet. Other states: put an extract at
+`/data/jev/osm_controls.json.gz` (same format).
+
+Evaluated on 20 of the owner's recorded drives (11 h): end-to-end over the whole approach to
+126 of 128 lights / stop signs where the driver stopped (DEC alone: 68), 4.6% of open road.
 
 ## Setup on the device
 
@@ -22,7 +29,7 @@ Mapbox token exist, otherwise OpenStreetMap signals and stop signs ahead of the 
    JSON
    ```
 
-   `jevd` starts on the next drive. Set `"enabled": false` to turn it off.
+   Both keys are optional (`{"enabled": true}` runs the offline map rule alone). `jevd` starts on the next drive. Set `"enabled": false` to turn it off.
 4. Optional destination for the Mapbox route (otherwise OpenStreetMap is used):
 
    ```sh
@@ -35,3 +42,8 @@ Decisions are logged to `/data/jev/log/*.jsonl`. The car needs internet (Wi-Fi o
 
 The mici onroad HUD shows the direction of travel (N, NE, E, SE, S, SW, W, NW) in the top right
 corner, from the GPS course. It keeps the last direction while stopped.
+
+## Data license
+
+`data/illinois_controls.json.gz`: data (c) OpenStreetMap contributors, available under the Open
+Database License 1.0 (https://www.openstreetmap.org/copyright).

@@ -3,7 +3,7 @@ import json
 import pytest
 
 from openpilot.sunnypilot.jev import client, config, logic
-from openpilot.sunnypilot.jev.controls import MapboxRoute, OsmControls
+from openpilot.sunnypilot.jev.controls import MapboxRoute, OfflineControls, OsmControls
 from openpilot.sunnypilot.jev.geo import compass_point, distance_m
 from openpilot.sunnypilot.jev.reader import JevModeReader, write_mode
 
@@ -39,12 +39,12 @@ class TestReader:
 
 
 class TestConfig:
-  def test_needs_enabled_and_key(self, tmp_path):
+  def test_enabled_flag_only(self, tmp_path):
     path = tmp_path / "config.json"
     assert not config.enabled(path)
-    path.write_text(json.dumps({"enabled": True}))
+    path.write_text(json.dumps({"enabled": False, "typesafe_api_key": "k"}))
     assert not config.enabled(path)
-    path.write_text(json.dumps({"enabled": True, "typesafe_api_key": "k"}))
+    path.write_text(json.dumps({"enabled": True}))  # map rule runs without a Jev key
     assert config.enabled(path)
 
 
@@ -177,3 +177,30 @@ def test_osm_tries_mirrors_then_backs_off():
   assert len(session.urls) == 3  # every mirror tried once
   assert not osm.needs_refresh(LAT, LON, now=30.0)  # backing off
   assert osm.needs_refresh(LAT, LON, now=61.0)
+
+
+class TestOffline:
+  def test_load_and_ahead(self, tmp_path):
+    import gzip
+    path = tmp_path / "controls.json.gz"
+    nodes = [[round((LAT + 120 * M_LAT) * 1e5), round(LON * 1e5), 1], [round((LAT + 3000 * M_LAT) * 1e5), round(LON * 1e5), 0]]
+    with gzip.open(path, "wt") as f:
+      json.dump({"nodes": nodes}, f)
+    offline = OfflineControls.load((tmp_path / "missing.json.gz", path))
+    ahead = offline.ahead(LAT, LON, 0.0)
+    assert ahead["present"] and ahead["type"] == "stop_sign" and 115 <= ahead["distance_m"] <= 125
+    assert not offline.ahead(LAT, LON, 180.0)["present"]
+    assert OfflineControls.load((tmp_path / "missing.json.gz",)) is None
+
+
+class TestMapRule:
+  @pytest.mark.parametrize("control,turn,speed,expected", [
+    ({"present": True, "distance_m": 140}, None, 5.0, True),     # within 150 m
+    ({"present": True, "distance_m": 220}, None, 30.0, True),    # within 8 s at 30 m/s
+    ({"present": True, "distance_m": 220}, None, 10.0, False),
+    ({"present": False}, {"angle_deg": 90, "distance_m": 100}, 10.0, True),
+    ({"present": False}, {"angle_deg": 20, "distance_m": 100}, 10.0, False),
+    ({"present": False}, None, 30.0, False),
+  ])
+  def test_rule(self, control, turn, speed, expected):
+    assert logic.map_rule_blended(control, turn, speed) is expected
