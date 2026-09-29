@@ -22,6 +22,7 @@ import openpilot.cereal.messaging as messaging
 from openpilot.common.realtime import Ratekeeper
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.jev import client, config, logic
+from openpilot.sunnypilot.jev.geo import gps_has_fix
 from openpilot.sunnypilot.jev.controls import MapboxRoute, OfflineControls, OsmControls
 from openpilot.sunnypilot.jev.reader import write_mode
 
@@ -97,7 +98,7 @@ def main() -> None:
     now = time.monotonic()
     if now - last_config > CONFIG_EVERY_S:
       cfg, last_config = config.load(), now
-    gps = next((sm[s] for s in ("gpsLocationExternal", "gpsLocation") if sm.alive[s] and sm[s].hasFix), None)
+    gps = next((sm[s] for s in ("gpsLocationExternal", "gpsLocation") if sm.alive[s] and gps_has_fix(sm[s])), None)
     if not cfg.get("enabled") or gps is None:
       rk.keep_time()
       continue
