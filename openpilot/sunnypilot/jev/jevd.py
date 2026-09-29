@@ -25,8 +25,8 @@ from openpilot.sunnypilot.jev import client, config, logic
 from openpilot.sunnypilot.jev.controls import MapboxRoute, OfflineControls, OsmControls
 from openpilot.sunnypilot.jev.reader import write_mode
 
-DESTINATION_PATH = Path("/data/jev/destination.json")
-LOG_DIR = Path("/data/jev/log")
+DESTINATION_PATH = config.JEV_DIR / "destination.json"
+LOG_DIR = config.JEV_DIR / "log"
 LOG_MAX_BYTES = 20 * 1024 * 1024
 CONFIG_EVERY_S = 10.0
 

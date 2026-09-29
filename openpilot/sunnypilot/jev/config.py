@@ -6,9 +6,11 @@ would need a rebuild). Keys never go in the repo.
   {"enabled": true, "typesafe_api_key": "...", "mapbox_token": "..."}   # both keys optional
 """
 import json
+import os
 from pathlib import Path
 
-CONFIG_PATH = Path("/data/jev/config.json")
+JEV_DIR = Path(os.environ.get("JEV_DIR", "/data/jev"))  # override for PC / simulator runs
+CONFIG_PATH = JEV_DIR / "config.json"
 
 
 def load(path: Path = CONFIG_PATH) -> dict:
