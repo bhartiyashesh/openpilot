@@ -204,3 +204,16 @@ class TestMapRule:
   ])
   def test_rule(self, control, turn, speed, expected):
     assert logic.map_rule_blended(control, turn, speed) is expected
+
+
+def test_parse_geocode():
+  from openpilot.sunnypilot.jev.set_destination import parse_geocode
+  data = {"features": [{"geometry": {"coordinates": [-87.6359, 41.8789]}, "properties": {"full_address": "Willis Tower, Chicago"}}]}
+  assert parse_geocode(data) == (41.8789, -87.6359, "Willis Tower, Chicago")
+
+
+def test_parse_coordinates():
+  from openpilot.sunnypilot.jev.set_destination import parse_coordinates
+  assert parse_coordinates("41.8789,-87.6359") == (41.8789, -87.6359)
+  assert parse_coordinates("233 S Wacker Dr, Chicago") is None
+  assert parse_coordinates("91,0") is None
