@@ -1,4 +1,5 @@
 import math
+import os
 from multiprocessing import Queue
 
 from metadrive.component.sensors.base_camera import _cuda_enable
@@ -28,7 +29,10 @@ def curve_block(length, angle=45, direction=0):
   }
 
 def create_map(track_size=60):
-  curve_len = track_size * 2
+  # TRACK_SIZE stretches the straights and CURVE_RADIUS tightens the three 90 degree curves
+  # (meters); the defaults keep upstream's 60 m straights and gentle 120 m curves
+  track_size = int(os.environ.get("TRACK_SIZE", track_size))
+  curve_len = int(os.environ.get("CURVE_RADIUS", track_size * 2))
   return {
     "type": MapGenerateMethod.PG_MAP_FILE,
     "lane_num": 2,

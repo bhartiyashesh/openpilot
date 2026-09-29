@@ -15,7 +15,8 @@ from openpilot.common.params import Params
 set_params_enabled()
 p = Params()
 for k in ('ExperimentalMode', 'ExperimentalModeConfirmed', 'DynamicExperimentalControl',
-          'AlphaLongitudinalEnabled'):  # sim panda claims BOSCH_LONG; without op long, pcmCruise never engages
+          'AlphaLongitudinalEnabled',  # sim panda claims BOSCH_LONG; without op long, pcmCruise never engages
+          'SmartCruiseControlVision'):  # slow for sharp curves from the model's predicted path
     p.put_bool(k, True)
 "
 exec python3 -X faulthandler -c "from openpilot.system.manager import manager; manager.main()"
