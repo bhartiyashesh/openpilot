@@ -414,7 +414,7 @@ class SelfdriveD(CruiseHelper):
           self.events.add(EventName.cameraMalfunction)
         elif not self.sm.all_freq_ok(self.camera_packets):
           self.events.add(EventName.cameraFrameRate)
-    if not REPLAY and self.rk.lagging:
+    if not REPLAY and not SIMULATION and self.rk.lagging:
       self.events.add(EventName.selfdrivedLagging)
     if self.CP.openpilotLongitudinalControl:
       if self.sm['radarState'].radarErrors.canError:

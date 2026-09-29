@@ -1,3 +1,5 @@
+import os
+
 class LinuxSystemStats:
   def __init__(self) -> None:
     self._last_cpu_times = self._read_cpu_times()
@@ -5,6 +7,8 @@ class LinuxSystemStats:
   @staticmethod
   def _read_cpu_times() -> dict[int, tuple[int, int]]:
     cpu_times = {}
+    if not os.path.exists('/proc/stat'):  # local macOS sim patch: no /proc on macOS
+      return cpu_times
     with open('/proc/stat') as f:
       for line in f:
         name, *values = line.split()
@@ -40,6 +44,8 @@ class LinuxSystemStats:
   @staticmethod
   def memory_usage_percent() -> float:
     memory = {}
+    if not os.path.exists('/proc/meminfo'):  # local macOS sim patch
+      return 0.
     with open('/proc/meminfo') as f:
       for line in f:
         key, value, *_ = line.split()
