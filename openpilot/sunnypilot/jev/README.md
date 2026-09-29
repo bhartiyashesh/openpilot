@@ -30,11 +30,16 @@ Evaluated on 20 of the owner's recorded drives (11 h): end-to-end over the whole
    ```
 
    Both keys are optional (`{"enabled": true}` runs the offline map rule alone). `jevd` starts on the next drive. Set `"enabled": false` to turn it off.
-4. Optional destination for the Mapbox route (otherwise OpenStreetMap is used):
+4. Optional destination for the Mapbox route (otherwise the offline OpenStreetMap map is used).
+   From a computer on the same network as the device:
 
    ```sh
-   echo '{"lat": 42.0419, "lon": -87.7797}' > /data/jev/destination.json
+   python openpilot/sunnypilot/jev/set_destination.py "233 S Wacker Dr, Chicago, IL" --host comma@<device-ip>
+   python openpilot/sunnypilot/jev/set_destination.py --clear --host comma@<device-ip>
    ```
+
+   It shows the Mapbox match and asks before writing `/data/jev/destination.json`. Street addresses
+   work, landmark names do not; `"lat,lon"` also works.
 
 Decisions are logged to `/data/jev/log/*.jsonl`. The car needs internet (Wi-Fi or cellular).
 
