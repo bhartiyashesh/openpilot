@@ -7,7 +7,7 @@ See the LICENSE.md file in the root directory for more details.
 import pyray as rl
 
 from openpilot.selfdrive.ui.ui_state import ui_state
-from openpilot.sunnypilot.jev.geo import compass_point
+from openpilot.sunnypilot.jev.geo import compass_point, gps_has_fix
 from openpilot.system.ui.lib.application import gui_app, FontWeight
 from openpilot.system.ui.lib.text_measure import measure_text_cached
 from openpilot.system.ui.widgets import Widget
@@ -32,7 +32,7 @@ class CompassRenderer(Widget):
       if service not in sm.services or not sm.updated[service]:
         continue
       gps = sm[service]
-      if gps.hasFix and gps.speed > MIN_SPEED_MS:
+      if gps_has_fix(gps) and gps.speed > MIN_SPEED_MS:
         self.bearing = gps.bearingDeg % 360.0
         return
 

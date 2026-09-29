@@ -29,3 +29,8 @@ def angle_diff(a: float, b: float) -> float:
 def compass_point(bearing: float) -> str:
   """8-point compass direction for a bearing in degrees."""
   return COMPASS_POINTS[int(((bearing % 360.0) + 22.5) // 45.0) % 8]
+
+
+def gps_has_fix(gps) -> bool:
+  """GpsLocationData fix: newer builds set hasFix, older ones (and the simulator) only flags bit 0."""
+  return bool(gps.hasFix or (gps.flags & 1))
