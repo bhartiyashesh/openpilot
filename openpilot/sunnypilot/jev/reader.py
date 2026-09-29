@@ -4,10 +4,12 @@ side never raises and treats anything missing, malformed or stale as "no Jev opi
 """
 import json
 import os
+import tempfile
 import time
 from pathlib import Path
 
-MODE_PATH = Path("/dev/shm/jev_mode.json")
+SHM = Path("/dev/shm")
+MODE_PATH = (SHM if SHM.is_dir() else Path(tempfile.gettempdir())) / "jev_mode.json"  # macOS has no /dev/shm
 MAX_AGE_S = 2.5  # older decisions are ignored (Jev slow or offline -> DEC alone)
 READ_EVERY_S = 0.25
 
