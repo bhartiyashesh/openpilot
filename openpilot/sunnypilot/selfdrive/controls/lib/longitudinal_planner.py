@@ -11,6 +11,8 @@ from openpilot.common.constants import CV
 from openpilot.selfdrive.car.cruise import V_CRUISE_MAX
 from openpilot.sunnypilot.selfdrive.controls.lib.dec.dec import DynamicExperimentalController
 from openpilot.sunnypilot.jev.reader import JevModeReader
+
+BLINKER_E2E_MAX_V = 24.6  # 55 mph
 from openpilot.sunnypilot.selfdrive.controls.lib.e2e_alerts_helper import E2EAlertsHelper
 from openpilot.sunnypilot.selfdrive.controls.lib.smart_cruise_control.smart_cruise_control import SmartCruiseControl
 from openpilot.sunnypilot.selfdrive.controls.lib.speed_limit.speed_limit_assist import SpeedLimitAssist
@@ -43,8 +45,13 @@ class LongitudinalPlannerSP:
     if not self.dec.active():
       return experimental_mode
 
-    # Jev can only add end-to-end time: blended if DEC OR a fresh Jev decision says so
-    return experimental_mode and (self.dec.mode() == "blended" or self.jev.wants_blended())
+    # A blinker below highway speed means an intersection: force end-to-end so the model
+    # slows into and creeps through the turn (FrogPilot's conditional experimental pattern)
+    CS = sm['carState']
+    blinker_turn = (CS.leftBlinker or CS.rightBlinker) and CS.vEgo < BLINKER_E2E_MAX_V
+
+    # These can only add end-to-end time: blended if DEC OR blinker OR a fresh Jev decision
+    return experimental_mode and (self.dec.mode() == "blended" or blinker_turn or self.jev.wants_blended())
 
   def update_targets(self, sm: messaging.SubMaster, v_ego: float, a_ego: float, v_cruise: float) -> tuple[float, float]:
     CS = sm['carState']
