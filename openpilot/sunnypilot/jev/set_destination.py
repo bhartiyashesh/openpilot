@@ -51,6 +51,7 @@ def main() -> None:
   parser.add_argument("--host", required=True, help="ssh target, e.g. comma@192.168.1.20")
   parser.add_argument("--token", default=os.environ.get("MAPBOX_TOKEN"))
   parser.add_argument("--clear", action="store_true")
+  parser.add_argument("--yes", action="store_true", help="accept the geocoder match without asking (for scripted callers)")
   args = parser.parse_args()
   if args.clear:
     subprocess.run(["ssh", args.host, f"rm -f {REMOTE_PATH}"], check=True)
@@ -65,7 +66,7 @@ def main() -> None:
     if not args.token:
       parser.error("a Mapbox token (--token or MAPBOX_TOKEN) is needed for addresses")
     lat, lon, name = geocode(args.address, args.token)
-    if input(f"Mapbox matched: {name} ({lat:.5f}, {lon:.5f}). Use it? [y/N] ").strip().lower() != "y":
+    if not args.yes and input(f"Mapbox matched: {name} ({lat:.5f}, {lon:.5f}). Use it? [y/N] ").strip().lower() != "y":
       print("not set")
       return
   payload = json.dumps({"lat": round(lat, 6), "lon": round(lon, 6), "name": name})

@@ -34,9 +34,12 @@ class LaneTurnController:
     self.param_read_counter += 1
 
   def update_lane_turn(self, blindspot_left: bool, blindspot_right: bool, left_blinker: bool, right_blinker: bool, v_ego: float) -> None:
-    if left_blinker and not right_blinker and v_ego < self.lane_turn_value and not blindspot_left:
+    # modeld forwards the desire as a rising-edge pulse only; asserting while stopped wastes it
+    # (a red light eats the edge and move-off never re-fires), so hold off until the car creeps
+    moving = v_ego > 0.5
+    if left_blinker and not right_blinker and moving and v_ego < self.lane_turn_value and not blindspot_left:
       self.turn_direction = TurnDirection.turnLeft
-    elif right_blinker and not left_blinker and v_ego < self.lane_turn_value and not blindspot_right:
+    elif right_blinker and not left_blinker and moving and v_ego < self.lane_turn_value and not blindspot_right:
       self.turn_direction = TurnDirection.turnRight
     else:
       self.turn_direction = TurnDirection.none
