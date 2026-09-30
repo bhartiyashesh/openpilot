@@ -28,6 +28,11 @@ _LEAVING_LAT_ACC_TH = 1.3  # Lat Acc threshold to trigger leaving turn state.
 _FINISH_LAT_ACC_TH = 1.1  # Lat Acc threshold to trigger the end of the turn cycle.
 
 _A_LAT_REG_MAX = 2.  # Maximum lateral acceleration
+# taco2 schedule at the low end: tighter turns need a slower entry for the torque-limited EPS
+# to complete the arc (comma's taco2 used interp(v, [5, 10, 20], [1.5, 2.0, 3.0]); we keep the
+# 2.0 cap above 10 m/s so highway behavior is unchanged)
+_A_LAT_BP = [5., 10.]
+_A_LAT_V = [1.5, 2.0]
 
 _NO_OVERSHOOT_TIME_HORIZON = 4.  # s. Time to use for velocity desired based on a_target when not overshooting.
 
@@ -97,7 +102,8 @@ class SmartCruiseControlVision:
       max_curve = self.max_pred_lat_acc / (v_ego**2)
 
       # Get the target velocity for the maximum curve
-      self.v_target = (_A_LAT_REG_MAX / max_curve) ** 0.5
+      a_lat_max = np.interp(v_ego, _A_LAT_BP, _A_LAT_V)
+      self.v_target = (a_lat_max / max_curve) ** 0.5
 
   def _update_state_machine(self) -> tuple[bool, bool]:
     # ENABLED, ENTERING, TURNING, LEAVING, OVERRIDING
